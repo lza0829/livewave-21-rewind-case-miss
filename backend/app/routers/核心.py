@@ -19,6 +19,11 @@ class 水位变小请求(BaseModel):
     处理时: str = ""
 
 
+class 结案请求(BaseModel):
+    房间键: str
+    案件号: str
+
+
 @路由.get("/健康")
 def 健康():
     return {
@@ -150,7 +155,7 @@ def 审查水位变小(房间键: str, 新值: str):
 
 @路由.post("/水位变小")
 def 提交水位变小(体: 水位变小请求):
-    """水位写闸。甲口径：新值 < 旧值整票拒绝，水位不变、已关窗保持关闭。"""
+    """水位写闸。甲口径「未结案件封锁」：变小是同票立案的处置；有未结案件则整票拒绝。"""
     return 水位闸.提交(体.房间键, 体.新值, 体.处理时 or None)
 
 
@@ -179,9 +184,32 @@ from app.modules import 回退案件 as 案
 
 @路由.get("/核证/回退案件")
 def 取回退案件(房间键: str | None = None):
+    """回退案件核证只读接口：案件簿 + 未结封锁 + 与水位闸/关窗表/热度窗对齐核验。"""
     conn = 连接()
     try:
         return 案.查案件(conn, 房间键)
+    finally:
+        conn.close()
+
+
+@路由.post("/回退案件/结案")
+def 做结案(体: 结案请求):
+    """结案：按 房间键+案件号 双重定位。结案后本房才可再处置变小。"""
+    from app.seed import 此刻
+
+    conn = 连接()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            结果 = 案.结案(conn, 体.房间键, 体.案件号, 此刻())
+            if 结果.get("valid") and 结果.get("已落盘"):
+                conn.commit()
+            else:
+                conn.rollback()
+            return 结果
+        except Exception:
+            conn.rollback()
+            raise
     finally:
         conn.close()
 

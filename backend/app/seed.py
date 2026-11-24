@@ -10,7 +10,9 @@ CREATE TABLE IF NOT EXISTS 回退案件 (
   请求值 TEXT NOT NULL DEFAULT '',
   处置态 TEXT NOT NULL DEFAULT '',
   案件号 TEXT NOT NULL DEFAULT '',
-  时刻 TEXT NOT NULL DEFAULT ''
+  时刻 TEXT NOT NULL DEFAULT '',
+  前案案件号 TEXT NOT NULL DEFAULT '',
+  结案时刻 TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS 站规 (
@@ -95,9 +97,18 @@ def 此刻() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _确保列(conn, 表: str, 列: str, 定义: str) -> None:
+    """老库补列：CREATE TABLE IF NOT EXISTS 不会给已存在的表加新列。"""
+    已有 = {r["name"] for r in conn.execute(f"PRAGMA table_info({表})")}
+    if 列 not in 已有:
+        conn.execute(f"ALTER TABLE {表} ADD COLUMN {列} {定义}")
+
+
 def 初始化库() -> None:
     conn = 连接()
     conn.executescript(建表)
+    _确保列(conn, "回退案件", "前案案件号", "TEXT NOT NULL DEFAULT ''")
+    _确保列(conn, "回退案件", "结案时刻", "TEXT NOT NULL DEFAULT ''")
     if conn.execute("SELECT COUNT(*) AS c FROM 站规").fetchone()["c"] == 0:
         for k, v in {
             "站名": "播浪",

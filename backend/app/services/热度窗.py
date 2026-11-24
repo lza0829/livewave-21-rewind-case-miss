@@ -24,6 +24,37 @@ def 已过旁路界(水位事件时: str, 窗止事件时: str, 允许迟到秒:
     旁路界 = 时间.加秒(窗止事件时, 允许迟到秒)
     return 时间.解析(水位事件时) >= 时间.解析(旁路界)
 
+
+def 重开越界窗(conn, 房间键: str, 新水位: str, 处理时: str) -> list:
+    """受控变小处置的同票动作：窗止高于新水位的已关闭窗重开回「开启」。
+
+    必须与降水位、立案处在同一事务——水位动了，已关闭窗集合必须同票跟上。
+    返回重开的窗（窗键/窗起/窗止/重开后状态）。
+    """
+    del 处理时
+    rows = conn.execute(
+        """SELECT * FROM 热度窗
+           WHERE 房间键=? AND 状态='已关闭' AND 窗止事件时>?
+           ORDER BY 窗起事件时""",
+        (房间键, 新水位),
+    ).fetchall()
+    重开 = []
+    for r in rows:
+        conn.execute(
+            "UPDATE 热度窗 SET 状态='开启', 关闭处理时='' WHERE 窗键=?",
+            (r["窗键"],),
+        )
+        重开.append(
+            {
+                "窗键": r["窗键"],
+                "窗起事件时": r["窗起事件时"],
+                "窗止事件时": r["窗止事件时"],
+                "当前状态": "开启",
+                "若重开则": "开启",
+            }
+        )
+    return 重开
+
 def _alias_payload(payload: dict) -> dict:
     out = dict(payload or {})
     if "窗键" in out and "window_key" not in out:

@@ -1,10 +1,12 @@
 from app.db import 连接
 from app.seed import 此刻
 from app.services import 水位闸
+from app.modules import 回退案件
 
 
 def 跑贯验() -> dict:
-    """窗输出与撤回互证：已关闭窗的点赞/送礼须等于窗内事件合计；撤回后版本与末次撤回一致。"""
+    """窗输出与撤回互证：已关闭窗的点赞/送礼须等于窗内事件合计；撤回后版本与末次撤回一致。
+    并核证回退案件簿与水位线/关窗表对齐（未结封锁唯一、无未挂案件的变小）。"""
     conn = 连接()
     try:
         问题 = []
@@ -35,6 +37,9 @@ def 跑贯验() -> dict:
 
         
         问题.extend(水位闸.不变式(conn))
+
+        # 回退案件簿 ↔ 水位线 ↔ 关窗表 对齐核证
+        问题.extend(回退案件.核证失齐(conn))
 
         
         脏旁路 = conn.execute(
